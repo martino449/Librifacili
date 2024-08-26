@@ -3,484 +3,433 @@ require 'openssl'
 require 'base64'
 
 # Modulo per la crittografia dei dati
-class Criptografia
-  ALGORITMO = 'aes-256-cbc' # Algoritmo di crittografia simmetrica
-  KEY = '12345678901234561234567890123456' # Chiave di crittografia (deve essere lunga 32 byte per aes-256-cbc)
-  IV = '1234567890123456' # Vector di inizializzazione (deve essere lungo 16 byte per aes-256-cbc)
+module Criptografia
+  ALGORITMO = 'aes-256-cbc'
+  KEY = '12345678901234561234567890123456'
+  IV = '1234567890123456'
 
-  # Metodo per cifrare i dati
   def self.cifra(dati)
-    cipher = OpenSSL::Cipher.new(ALGORITMO) # Crea un'istanza del cifratore
-    cipher.encrypt # Imposta il cifratore in modalità di cifratura
-    cipher.key = KEY # Imposta la chiave di cifratura
-    cipher.iv = IV # Imposta il vettore di inizializzazione
-    encrypted = cipher.update(dati) + cipher.final # Cifra i dati
-    Base64.encode64(encrypted) # Codifica i dati cifrati in Base64 per la memorizzazione
+    cipher = OpenSSL::Cipher.new(ALGORITMO)
+    cipher.encrypt
+    cipher.key = KEY
+    cipher.iv = IV
+    encrypted = cipher.update(dati) + cipher.final
+    Base64.encode64(encrypted)
   end
 
-  # Metodo per decifrare i dati
   def self.decifra(dati)
-    decipher = OpenSSL::Cipher.new(ALGORITMO) # Crea un'istanza del decifrator
-    decipher.decrypt # Imposta il decifrator in modalità di decifratura
-    decipher.key = KEY # Imposta la chiave di decifratura
-    decipher.iv = IV # Imposta il vettore di inizializzazione
-    decoded = Base64.decode64(dati) # Decodifica i dati da Base64
-    decipher.update(decoded) + decipher.final # Decifra i dati
-  end
-end
-
-# Classe che rappresenta un libro
-class Libro
-  attr_accessor :title, :author, :year, :borrowed_by, :borrowed_on, :crediti
-
-  # Costruttore per inizializzare un libro
-  def initialize(title, author, year, crediti)
-    @title = title
-    @author = author
-    @year = year
-    @borrowed_by = nil # Inizialmente, il libro non è preso in prestito
-    @borrowed_on = nil # Data di prestito non applicabile al momento della creazione
-    @crediti = crediti
-  end
-
-  # Metodo per ottenere una stringa informativa sul libro
-  def info
-    info_str = "#{@title} by #{@author}, published in #{@year}, worth #{@crediti} credits"
-    if @borrowed_by
-      info_str += " - Borrowed by #{@borrowed_by.username} on #{@borrowed_on}"
-    end
-    info_str
-  end
-
-  # Metodo per convertire un libro in un hash
-  def to_h
-    {
-      title: @title,
-      author: @author,
-      year: @year,
-      borrowed_by: @borrowed_by&.username, # Utilizza l'operatore safe navigation per evitare errori se borrowed_by è nil
-      borrowed_on: @borrowed_on,
-      crediti: @crediti
-    }
-  end
-
-  # Metodo per creare un libro a partire da un hash
-  def self.from_h(hash)
-    libro = new(hash['title'], hash['author'], hash['year'], hash['crediti'])
-    libro.borrowed_by = hash['borrowed_by'] ? Utente.new(hash['borrowed_by'], '', 0) : nil
-    libro.borrowed_on = hash['borrowed_on']
-    libro
-  end
-end
-
-# Classe che rappresenta una libreria
-class Libreria
-  def initialize
-    @libreria = [] # Inizialmente, la libreria è vuota
-  end
-
-  # Metodo per aggiungere un libro alla libreria
-  def add_book(libro)
-    @libreria << libro
-  end
-
-  # Metodo per elencare tutti i libri nella libreria
-  def list_books
-    if @libreria.empty?
-      "No books in the library." # Se non ci sono libri, restituisce un messaggio
-    else
-      @libreria.map(&:info).join("\n") # Converte ogni libro in una stringa e unisce le stringhe
-    end
-  end
-
-  # Metodo per prendere in prestito un libro
-  def borrow_book(title, user)
-    libro = @libreria.find { |b| b.title.downcase == title.downcase } # Trova il libro con il titolo specificato
-    if libro
-      if libro.borrowed_by.nil? # Controlla se il libro non è già in prestito
-        if user.crediti >= libro.crediti # Controlla se l'utente ha abbastanza crediti
-          libro.borrowed_by = user # Imposta l'utente come colui che ha preso in prestito il libro
-          libro.borrowed_on = Time.now.strftime("%d/%m/%Y") # Imposta la data di prestito
-          user.crediti -= libro.crediti # Deduce i crediti dell'utente
-          "Libro '#{libro.title}' prestato a #{user.username}." # Messaggio di successo
-        else
-          "Non hai abbastanza crediti per prendere in prestito questo libro." # Messaggio di errore se crediti insufficienti
-        end
-      else
-        "Il libro '#{libro.title}' è già preso in prestito da #{libro.borrowed_by.username}." # Messaggio se il libro è già in prestito
-      end
-    else
-      "Libro non trovato." # Messaggio se il libro non esiste nella libreria
-    end
-  end
-
-  # Metodo per restituire un libro
-  def return_book(title, user)
-    libro = @libreria.find { |b| b.title.downcase == title.downcase } # Trova il libro con il titolo specificato
-    if libro
-      if libro.borrowed_by.nil?
-        "Il libro '#{libro.title}' non è in prestito." # Messaggio se il libro non è in prestito
-      else
-        libro.borrowed_by = nil # Rimuove l'utente che aveva preso in prestito il libro
-        libro.borrowed_on = nil # Rimuove la data di prestito
-        user.crediti += libro.crediti # Riaggiunge i crediti all'utente
-        "Libro '#{libro.title}' restituito con successo. Hai guadagnato #{libro.crediti} crediti." # Messaggio di successo
-      end
-    else
-      "Libro non trovato." # Messaggio se il libro non esiste nella libreria
-    end
-  end
-
-  # Metodo per elencare tutti i libri in prestito
-  def list_borrowed_books
-    borrowed_books = @libreria.select { |b| b.borrowed_by } # Seleziona solo i libri che sono in prestito
-    if borrowed_books.empty?
-      "Nessun libro attualmente in prestito." # Messaggio se nessun libro è in prestito
-    else
-      borrowed_books.map(&:info).join("\n") # Converte ogni libro in una stringa e unisce le stringhe
-    end
-  end
-
-  # Metodo per convertire la libreria in una stringa JSON
-  def to_json
-    @libreria.map(&:to_h).to_json # Converte ogni libro in hash e poi in JSON
-  end
-
-  # Metodo per creare una libreria a partire da una stringa JSON
-  def self.from_json(json_str)
-    libreria = new # Crea una nuova istanza della libreria
-    libri_data = JSON.parse(json_str) # Parsea la stringa JSON in un array di hash
-    libri_data.each do |libro_data|
-      libreria.add_book(Libro.from_h(libro_data)) # Aggiunge ogni libro alla libreria
-    end
-    libreria
-  end
-
-  # Metodo per salvare la libreria su file
-  def save_to_file(filename)
-    dati = to_json # Converte la libreria in JSON
-    encrypted_dati = Criptografia.cifra(dati) # Cifra i dati
-    File.write(filename, encrypted_dati) # Scrive i dati cifrati su file
-  end
-
-  # Metodo per caricare la libreria da un file
-  def self.load_from_file(filename)
-    if File.exist?(filename) # Controlla se il file esiste
-      encrypted_dati = File.read(filename) # Legge i dati cifrati dal file
-      dati = Criptografia.decifra(encrypted_dati) # Decifra i dati
-      from_json(dati) # Crea una libreria a partire dai dati JSON decifrati
-    else
-      new # Restituisce una nuova libreria se il file non esiste
-    end
+    decipher = OpenSSL::Cipher.new(ALGORITMO)
+    decipher.decrypt
+    decipher.key = KEY
+    decipher.iv = IV
+    decoded = Base64.decode64(dati)
+    decipher.update(decoded) + decipher.final
   end
 end
 
 # Classe che rappresenta un utente
 class Utente
-  attr_accessor :username, :password, :crediti
+  attr_accessor :username, :password, :crediti, :ruolo
 
-  # Costruttore per inizializzare un utente
-  def initialize(username, password, crediti = 0)
+  def initialize(username, password, crediti = 0, ruolo = 'user')
     @username = username
     @password = password
     @crediti = crediti
+    @ruolo = ruolo
   end
 
-  # Metodo per autenticare l'utente
   def authenticate(password)
-    @password == password # Controlla se la password fornita corrisponde a quella dell'utente
+    @password == password
   end
 
-  # Metodo per convertire un utente in un hash
+  def guadagna_credito(amount)
+    @crediti += amount
+  end
+
+  def spende_credito(amount)
+    if @crediti >= amount
+      @crediti -= amount
+      true
+    else
+      false
+    end
+  end
+
   def to_h
     {
       username: @username,
       password: @password,
-      crediti: @crediti
+      crediti: @crediti,
+      ruolo: @ruolo
     }
   end
 
-  # Metodo per creare un utente a partire da un hash
   def self.from_h(hash)
-    new(hash['username'], hash['password'], hash['crediti'])
+    new(hash['username'], hash['password'], hash['crediti'], hash['ruolo'])
   end
 end
 
 # Classe per gestire il sistema degli utenti
 class SistemaGestioneUtenti
   def initialize
-    @utenti = {} # Hash per memorizzare gli utenti
+    @utenti = {}
   end
 
-  # Metodo per registrare un nuovo utente
-  def register(username, password)
-    if @utenti.key?(username) # Controlla se l'username è già esistente
-      "Username già esistente. Scegli un altro username." # Messaggio di errore se l'username è già in uso
+  def register(username, password, ruolo = 'user')
+    if @utenti.key?(username)
+      "Username già esistente. Scegli un altro username."
     else
-      utente = Utente.new(username, password) # Crea un nuovo utente
-      @utenti[username] = utente # Aggiunge l'utente al sistema
-      "Registrazione avvenuta con successo! Puoi ora effettuare il login." # Messaggio di successo
+      utente = Utente.new(username, password, 0, ruolo)
+      @utenti[username] = utente
+      "Registrazione avvenuta con successo! Puoi ora effettuare il login."
     end
   end
 
-  # Metodo per effettuare il login
   def login(username, password)
-    utente = @utenti[username] # Trova l'utente con lo username fornito
-    utente && utente.authenticate(password) ? utente : nil # Restituisce l'utente se autenticato, altrimenti nil
+    utente = @utenti[username]
+    utente && utente.authenticate(password) ? utente : nil
   end
 
-  # Metodo per elencare tutti gli utenti
   def list_users
     if @utenti.empty?
-      "No users registered." # Messaggio se non ci sono utenti registrati
+      "Nessun utente registrato."
     else
-      @utenti.map { |username, utente| "#{username} - Crediti: #{utente.crediti}" }.join("\n") # Elenco degli utenti e dei loro crediti
+      @utenti.map { |username, utente| "#{username} - Crediti: #{utente.crediti}" }.join("\n")
     end
   end
 
-  # Metodo per convertire il sistema di gestione utenti in JSON
   def to_json
-    @utenti.values.map(&:to_h).to_json # Converte ogni utente in hash e poi in JSON
+    @utenti.values.map(&:to_h).to_json
   end
 
-  # Metodo per creare un sistema di gestione utenti a partire da una stringa JSON
   def self.from_json(json_str)
-    sistema = new # Crea una nuova istanza del sistema di gestione utenti
-    utenti_data = JSON.parse(json_str) # Parsea la stringa JSON in un array di hash
+    sistema = new
+    utenti_data = JSON.parse(json_str)
     utenti_data.each do |utente_data|
-      sistema.add_user(Utente.from_h(utente_data)) # Aggiunge ogni utente al sistema
+      sistema.add_user(Utente.from_h(utente_data))
     end
     sistema
   end
 
-  # Metodo per aggiungere un utente al sistema
   def add_user(utente)
-    @utenti[utente.username] = utente # Aggiunge l'utente al sistema
+    @utenti[utente.username] = utente
   end
 
-  # Metodo per salvare il sistema di gestione utenti su file
   def save_to_file(filename)
-    dati = to_json # Converte il sistema in JSON
-    encrypted_dati = Criptografia.cifra(dati) # Cifra i dati
-    File.write(filename, encrypted_dati) # Scrive i dati cifrati su file
+    dati = to_json
+    encrypted_dati = Criptografia.cifra(dati)
+    File.write(filename, encrypted_dati)
   end
 
-  # Metodo per caricare il sistema di gestione utenti da un file
   def self.load_from_file(filename)
-    if File.exist?(filename) # Controlla se il file esiste
-      encrypted_dati = File.read(filename) # Legge i dati cifrati dal file
-      dati = Criptografia.decifra(encrypted_dati) # Decifra i dati
-      from_json(dati) # Crea un sistema a partire dai dati JSON decifrati
+    if File.exist?(filename)
+      encrypted_dati = File.read(filename)
+      dati = Criptografia.decifra(encrypted_dati)
+      from_json(dati)
     else
-      new # Restituisce un nuovo sistema se il file non esiste
+      new
     end
   end
 end
 
-# Classe per gestire le operazioni dell'admin
+# Classe per gestire la libreria
+class Libreria
+  def initialize
+    @libri = []
+    @prestiti = {}
+  end
+
+  def add_book(book)
+    @libri << book
+  end
+
+  def list_books
+    if @libri.empty?
+      "Nessun libro disponibile."
+    else
+      @libri.map(&:to_s).join("\n")
+    end
+  end
+
+  def list_borrowed_books
+    if @prestiti.empty?
+      "Nessun libro è stato prestato."
+    else
+      @prestiti.map { |username, libri| "#{username}: #{libri.join(', ')}" }.join("\n")
+    end
+  end
+
+  def borrow_book(username, titolo)
+    libro = @libri.find { |l| l.titolo == titolo }
+    if libro
+      utente = SistemaGestioneUtenti.load_from_file('utenti.json').login(username, '')
+      if utente
+        if utente.spende_credito(1)
+          if @prestiti[username]
+            @prestiti[username] << titolo
+          else
+            @prestiti[username] = [titolo]
+          end
+          @libri.delete(libro)
+          "Libro prestato con successo!"
+        else
+          "Credito insufficiente per prendere in prestito il libro."
+        end
+      else
+        "Utente non trovato."
+      end
+    else
+      "Il libro non è disponibile."
+    end
+  end
+
+  def return_book(username, titolo)
+    if @prestiti[username] && @prestiti[username].include?(titolo)
+      libro = Libro.new(titolo, "Autore sconosciuto", "Anno sconosciuto") # Aggiungere autore e anno appropriati
+      @libri << libro
+      @prestiti[username].delete(titolo)
+      @prestiti.delete(username) if @prestiti[username].empty?
+
+      # Guadagnare credito quando restituisce il libro
+      utente = SistemaGestioneUtenti.load_from_file('utenti.json').login(username, '')
+      if utente
+        utente.guadagna_credito(1)
+      end
+
+      "Libro restituito con successo!"
+    else
+      "Il libro non è stato prestato o non esiste."
+    end
+  end
+
+  def to_json
+    {
+      libri: @libri.map(&:to_h),
+      prestiti: @prestiti
+    }.to_json
+  end
+
+  def self.from_json(json_str)
+    data = JSON.parse(json_str)
+    libreria = new
+    data['libri'].each do |libro_data|
+      libreria.add_book(Libro.from_h(libro_data))
+    end
+    libreria.instance_variable_set(:@prestiti, data['prestiti'])
+    libreria
+  end
+
+  def save_to_file(filename)
+    dati = to_json
+    encrypted_dati = Criptografia.cifra(dati)
+    File.write(filename, encrypted_dati)
+  end
+
+  def self.load_from_file(filename)
+    if File.exist?(filename)
+      encrypted_dati = File.read(filename)
+      dati = Criptografia.decifra(encrypted_dati)
+      from_json(dati)
+    else
+      new
+    end
+  end
+end
+
+# Classe per rappresentare un libro
+class Libro
+  attr_accessor :titolo, :autore, :anno
+
+  def initialize(titolo, autore, anno)
+    @titolo = titolo
+    @autore = autore
+    @anno = anno
+  end
+
+  def to_h
+    {
+      titolo: @titolo,
+      autore: @autore,
+      anno: @anno
+    }
+  end
+
+  def self.from_h(hash)
+    new(hash['titolo'], hash['autore'], hash['anno'])
+  end
+
+  def to_s
+    "#{@titolo} di #{@autore} (#{@anno})"
+  end
+end
+
+# Classe per la gestione delle operazioni da amministratore
 class SistemaGestioneAdmin
-  attr_accessor :password
-
-  # Costruttore per inizializzare il sistema di gestione admin
   def initialize(password)
-    @password = password # Imposta la password dell'admin
+    @admin_password = password
   end
 
-  # Metodo per autenticare l'admin
-  def authenticate(input_password)
-    input_password == @password # Controlla se la password fornita corrisponde a quella dell'admin
+  def authenticate(password)
+    @admin_password == password
   end
 end
 
-# Metodo per mostrare il menu pre-login
+# File di configurazione
+LIBRERIA_FILE = 'libreria.json'
+UTENTI_FILE = 'utenti.json'
+ADMIN_PASSWORD = 'admin123'
+CREDITO_AGGIUNTA_LIBRO = 1 # Credito guadagnato per ogni libro aggiunto
+
+# Inizializzazione
+libreria = Libreria.load_from_file(LIBRERIA_FILE)
+sistema_utenti = SistemaGestioneUtenti.load_from_file(UTENTI_FILE)
+
+# Creazione dell'utente admin se non esiste
+unless sistema_utenti.login('admin', ADMIN_PASSWORD)
+  sistema_utenti.register('admin', ADMIN_PASSWORD, 'admin')
+  sistema_utenti.save_to_file(UTENTI_FILE)
+end
+
+admin_sistema = SistemaGestioneAdmin.new(ADMIN_PASSWORD)
+
+# Funzioni di visualizzazione del menu
 def mostra_menu_pre_login
-  puts "Menu Pre-Login:"
-  puts "1. Registrati"
-  puts "2. Effettua il login"
-  puts "3. Accedi al menu admin (richiesta password)"
-  puts "4. Esci"
-  print "Scegli un'opzione: "
+  puts "Menu Pre-Login"
+  puts "1. Registrazione"
+  puts "2. Login"
+  puts "3. Uscita"
 end
 
-# Metodo per mostrare il menu admin
+def mostra_menu_utente
+  puts "Menu Utente"
+  puts "1. Visualizza Libri"
+  puts "2. Visualizza Libri Prestati"
+  puts "3. Prestare Libro"
+  puts "4. Restituire Libro"
+  puts "5. Aggiungere Libro e Guadagnare Credito"
+  puts "6. Visualizza Saldo Crediti"
+  puts "7. Esci"
+end
+
 def mostra_menu_admin
-  puts "Menu Admin:"
-  puts "1. Mostra tutti gli utenti"
-  puts "2. Mostra tutti i libri"
-  puts "3. Mostra libri in prestito"
-  puts "4. Torna al menu principale"
-  print "Scegli un'opzione: "
+  puts "Menu Admin"
+  puts "1. Lista Utenti"
+  puts "2. Visualizza Libri"
+  puts "3. Visualizza Libri Prestati"
+  puts "4. Aggiungi Libro"
+  puts "5. Esci"
 end
 
-# Metodo per mostrare il menu post-login
-def mostra_menu_post_login
-  puts "Menu Post-Login:"
-  puts "1. Aggiungi un nuovo libro"
-  puts "2. Mostra tutti i libri"
-  puts "3. Prendi in prestito un libro"
-  puts "4. Restituisci un libro"
-  puts "5. Mostra libri in prestito"
-  puts "6. Esci"
-  print "Scegli un'opzione: "
-end
-
-# File di salvataggio
-LIBRI_FILE = 'libreria.json' # File per salvare la libreria
-UTENTI_FILE = 'utenti.json' # File per salvare gli utenti
-
-# Carica i dati esistenti
-libreria = Libreria.load_from_file(LIBRI_FILE) # Carica i libri dal file
-sistema_utenti = SistemaGestioneUtenti.load_from_file(UTENTI_FILE) # Carica gli utenti dal file
-sistema_admin = SistemaGestioneAdmin.new("admin123") # Crea un'istanza del sistema admin con una password di esempio
-utente_corrente = nil # Variabile per memorizzare l'utente attualmente loggato
-
-# Menu Pre-Login
+# Main Program
 loop do
   mostra_menu_pre_login
-  scelta = gets.chomp.to_i
+  scelta_pre_login = gets.chomp.to_i
 
-  case scelta
+  case scelta_pre_login
   when 1
-    print "Inserisci un username: "
+    print "Inserisci username: "
     username = gets.chomp
-    print "Inserisci una password: "
+    print "Inserisci password: "
     password = gets.chomp
-    puts sistema_utenti.register(username, password) # Registra l'utente e mostra il risultato
-    sistema_utenti.save_to_file(UTENTI_FILE) # Salva i dati degli utenti
-
+    print "Inserisci ruolo (user/admin): "
+    ruolo = gets.chomp
+    puts sistema_utenti.register(username, password, ruolo)
+    sistema_utenti.save_to_file(UTENTI_FILE)
   when 2
-    print "Inserisci il tuo username: "
+    print "Inserisci username: "
     username = gets.chomp
-    print "Inserisci la tua password: "
+    print "Inserisci password: "
     password = gets.chomp
+    utente = sistema_utenti.login(username, password)
 
-    utente = sistema_utenti.login(username, password) # Prova a fare il login
     if utente
-      utente_corrente = utente # Imposta l'utente corrente se il login ha successo
-      puts "Login avvenuto con successo! Benvenuto #{utente.username}.\n\n"
-      break # Esce dal loop pre-login se il login è avvenuto con successo
-    else
-      puts "Username o password non validi. Riprova.\n\n" # Messaggio di errore per credenziali non valide
-    end
+      if utente.ruolo == 'admin'
+        puts "Benvenuto admin!"
+        loop do
+          mostra_menu_admin
+          scelta_admin = gets.chomp.to_i
 
-  when 3
-    print "Inserisci la password admin: "
-    password = gets.chomp
+          case scelta_admin
+          when 1
+            puts sistema_utenti.list_users
+          when 2
+            puts libreria.list_books
+          when 3
+            puts libreria.list_borrowed_books
+          when 4
+            print "Inserisci titolo del libro: "
+            titolo = gets.chomp
+            print "Inserisci autore del libro: "
+            autore = gets.chomp
+            print "Inserisci anno del libro: "
+            anno = gets.chomp.to_i
+            libro = Libro.new(titolo, autore, anno)
+            libreria.add_book(libro)
+            libreria.save_to_file(LIBRERIA_FILE)
+            puts "Libro aggiunto con successo!"
+          when 5
+            break
+          else
+            puts "Scelta non valida."
+          end
+        end
+      else
+        puts "Benvenuto #{utente.username}!"
+        loop do
+          mostra_menu_utente
+          scelta_utente = gets.chomp.to_i
 
-    if sistema_admin.authenticate(password) # Prova ad autenticare l'admin
-      loop do
-        mostra_menu_admin
-        scelta_admin = gets.chomp.to_i
-
-        case scelta_admin
-        when 1
-          puts "Utenti registrati:"
-          puts sistema_utenti.list_users # Mostra tutti gli utenti
-          puts "\n"
-
-        when 2
-          puts "Libri nella libreria:"
-          puts libreria.list_books # Mostra tutti i libri
-          puts "\n"
-
-        when 3
-          puts "Libri in prestito:"
-          puts libreria.list_borrowed_books # Mostra tutti i libri in prestito
-          puts "\n"
-
-        when 4
-          puts "Ritorno al menu principale...\n\n"
-          break # Esce dal menu admin e torna al menu principale
-        else
-          puts "Opzione non valida, riprova." # Messaggio di errore per opzione non valida
+          case scelta_utente
+          when 1
+            puts libreria.list_books
+          when 2
+            puts libreria.list_borrowed_books
+          when 3
+            print "Inserisci titolo del libro da prestare: "
+            titolo = gets.chomp
+            if utente.spende_credito(1)
+              puts libreria.borrow_book(utente.username, titolo)
+              libreria.save_to_file(LIBRERIA_FILE)
+              sistema_utenti.save_to_file(UTENTI_FILE)
+            else
+              puts "Credito insufficiente per prendere in prestito il libro."
+            end
+          when 4
+            print "Inserisci titolo del libro da restituire: "
+            titolo = gets.chomp
+            puts libreria.return_book(utente.username, titolo)
+            utente.guadagna_credito(CREDITO_AGGIUNTA_LIBRO)
+            libreria.save_to_file(LIBRERIA_FILE)
+            sistema_utenti.save_to_file(UTENTI_FILE)
+          when 5
+            print "Inserisci titolo del libro da aggiungere: "
+            titolo = gets.chomp
+            print "Inserisci autore del libro: "
+            autore = gets.chomp
+            print "Inserisci anno del libro: "
+            anno = gets.chomp.to_i
+            libro = Libro.new(titolo, autore, anno)
+            libreria.add_book(libro)
+            utente.guadagna_credito(CREDITO_AGGIUNTA_LIBRO)
+            libreria.save_to_file(LIBRERIA_FILE)
+            sistema_utenti.save_to_file(UTENTI_FILE)
+            puts "Libro aggiunto e credito guadagnato con successo!"
+          when 6
+            puts "Saldo crediti: #{utente.crediti}"
+          when 7
+            break
+          else
+            puts "Scelta non valida."
+          end
         end
       end
     else
-      puts "Password admin non valida." # Messaggio di errore per password admin non valida
+      puts "Username o password errati."
     end
-
-  when 4
-    puts "Arrivederci!"
-    exit # Termina l'applicazione
-
-  else
-    puts "Opzione non valida. Riprova.\n\n" # Messaggio di errore per opzione non valida
-  end
-end
-
-# Menu Post-Login
-loop do
-  mostra_menu_post_login
-  scelta = gets.chomp.to_i
-
-  case scelta
-  when 1
-    print "Inserisci il titolo del libro: "
-    title = gets.chomp
-    print "Inserisci l'autore del libro: "
-    author = gets.chomp
-    print "Inserisci l'anno di pubblicazione: "
-    year = gets.chomp
-    print "Inserisci i crediti per questo libro (1-5): "
-    crediti = gets.chomp.to_i
-
-    if crediti < 1 || crediti > 5
-      puts "I crediti devono essere tra 1 e 5. Riprova." # Messaggio di errore per crediti non validi
-    else
-      libro = Libro.new(title, author, year, crediti) # Crea un nuovo libro
-      libreria.add_book(libro) # Aggiunge il libro alla libreria
-      utente_corrente.crediti += 1 # Guadagna 1 credito per aggiungere un libro
-      libreria.save_to_file(LIBRI_FILE) # Salva i dati della libreria
-      sistema_utenti.save_to_file(UTENTI_FILE) # Salva i dati degli utenti
-      puts "Libro aggiunto con successo! Hai guadagnato 1 credito." # Messaggio di successo
-    end
-
-  when 2
-    puts "Libri nella libreria:"
-    puts libreria.list_books # Mostra tutti i libri nella libreria
-    puts "\n"
-
   when 3
-    print "Inserisci il titolo del libro che vuoi prendere in prestito: "
-    title = gets.chomp
-    puts libreria.borrow_book(title, utente_corrente) # Prova a prendere in prestito un libro
-    libreria.save_to_file(LIBRI_FILE) # Salva i dati della libreria
-    sistema_utenti.save_to_file(UTENTI_FILE) # Salva i dati degli utenti
-
-  when 4
-    print "Inserisci il titolo del libro che vuoi restituire: "
-    title = gets.chomp
-    puts libreria.return_book(title, utente_corrente) # Prova a restituire un libro
-    libreria.save_to_file(LIBRI_FILE) # Salva i dati della libreria
-    sistema_utenti.save_to_file(UTENTI_FILE) # Salva i dati degli utenti
-
-  when 5
-    puts "Libri in prestito:"
-    puts libreria.list_borrowed_books # Mostra tutti i libri in prestito
-    puts "\n"
-
-  when 6
-    puts "Arrivederci!"
-    exit # Termina l'applicazione
-
+    puts "Uscita dal programma."
+    break
   else
-    puts "Opzione non valida. Riprova." # Messaggio di errore per opzione non valida
+    puts "Scelta non valida."
   end
 end
-
-
-
-
-
-#Fine del codice
-# ---------------------------------------------
-# Copyright (c) 2024 Mario Pisano
-#
-# Questo programma è distribuito sotto la licenza EUPL, Versione 1.2 o – non appena 
-# saranno approvate dalla Commissione Europea – versioni successive della EUPL 
-# (la "Licenza");
-# Puoi usare, modificare e/o ridistribuire il programma sotto i termini della 
-# Licenza. 
-# 
-# Puoi trovare una copia della Licenza all'indirizzo:
-# https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
