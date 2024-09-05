@@ -280,18 +280,6 @@ UTENTI_FILE = 'utenti.json'
 ADMIN_PASSWORD = 'admin123'
 CREDITO_AGGIUNTA_LIBRO = 1 # Credito guadagnato per ogni libro aggiunto
 
-# Inizializzazione
-libreria = Libreria.load_from_file(LIBRERIA_FILE)
-sistema_utenti = SistemaGestioneUtenti.load_from_file(UTENTI_FILE)
-
-# Creazione dell'utente admin se non esiste
-unless sistema_utenti.login('admin', ADMIN_PASSWORD)
-  sistema_utenti.register('admin', ADMIN_PASSWORD, 'admin')
-  sistema_utenti.save_to_file(UTENTI_FILE)
-end
-
-admin_sistema = SistemaGestioneAdmin.new(ADMIN_PASSWORD)
-
 # Funzioni di visualizzazione del menu
 def mostra_menu_pre_login
   puts "Menu Pre-Login"
@@ -320,116 +308,145 @@ def mostra_menu_admin
   puts "5. Esci"
 end
 
-# Main Program
-loop do
-  mostra_menu_pre_login
-  scelta_pre_login = gets.chomp.to_i
+def loop_admin(sistema_utenti, libreria)
+  loop do
+    mostra_menu_admin
+    scelta_admin = gets.chomp.to_i
 
-  case scelta_pre_login
-  when 1
-    print "Inserisci username: "
-    username = gets.chomp
-    print "Inserisci password: "
-    password = gets.chomp
-    print "Inserisci ruolo (user/admin): "
-    ruolo = gets.chomp
-    puts sistema_utenti.register(username, password, ruolo)
-    sistema_utenti.save_to_file(UTENTI_FILE)
-  when 2
-    print "Inserisci username: "
-    username = gets.chomp
-    print "Inserisci password: "
-    password = gets.chomp
-    utente = sistema_utenti.login(username, password)
-
-    if utente
-      if utente.ruolo == 'admin'
-        puts "Benvenuto admin!"
-        loop do
-          mostra_menu_admin
-          scelta_admin = gets.chomp.to_i
-
-          case scelta_admin
-          when 1
-            puts sistema_utenti.list_users
-          when 2
-            puts libreria.list_books
-          when 3
-            puts libreria.list_borrowed_books
-          when 4
-            print "Inserisci titolo del libro: "
-            titolo = gets.chomp
-            print "Inserisci autore del libro: "
-            autore = gets.chomp
-            print "Inserisci anno del libro: "
-            anno = gets.chomp.to_i
-            libro = Libro.new(titolo, autore, anno)
-            libreria.add_book(libro)
-            libreria.save_to_file(LIBRERIA_FILE)
-            puts "Libro aggiunto con successo!"
-          when 5
-            break
-          else
-            puts "Scelta non valida."
-          end
-        end
-      else
-        puts "Benvenuto #{utente.username}!"
-        loop do
-          mostra_menu_utente
-          scelta_utente = gets.chomp.to_i
-
-          case scelta_utente
-          when 1
-            puts libreria.list_books
-          when 2
-            puts libreria.list_borrowed_books
-          when 3
-            print "Inserisci titolo del libro da prestare: "
-            titolo = gets.chomp
-            if utente.spende_credito(1)
-              puts libreria.borrow_book(utente.username, titolo)
-              libreria.save_to_file(LIBRERIA_FILE)
-              sistema_utenti.save_to_file(UTENTI_FILE)
-            else
-              puts "Credito insufficiente per prendere in prestito il libro."
-            end
-          when 4
-            print "Inserisci titolo del libro da restituire: "
-            titolo = gets.chomp
-            puts libreria.return_book(utente.username, titolo)
-            utente.guadagna_credito(CREDITO_AGGIUNTA_LIBRO)
-            libreria.save_to_file(LIBRERIA_FILE)
-            sistema_utenti.save_to_file(UTENTI_FILE)
-          when 5
-            print "Inserisci titolo del libro da aggiungere: "
-            titolo = gets.chomp
-            print "Inserisci autore del libro: "
-            autore = gets.chomp
-            print "Inserisci anno del libro: "
-            anno = gets.chomp.to_i
-            libro = Libro.new(titolo, autore, anno)
-            libreria.add_book(libro)
-            utente.guadagna_credito(CREDITO_AGGIUNTA_LIBRO)
-            libreria.save_to_file(LIBRERIA_FILE)
-            sistema_utenti.save_to_file(UTENTI_FILE)
-            puts "Libro aggiunto e credito guadagnato con successo!"
-          when 6
-            puts "Saldo crediti: #{utente.crediti}"
-          when 7
-            break
-          else
-            puts "Scelta non valida."
-          end
-        end
-      end
+    case scelta_admin
+    when 1
+      puts sistema_utenti.list_users
+    when 2
+      puts libreria.list_books
+    when 3
+      puts libreria.list_borrowed_books
+    when 4
+      print "Inserisci titolo del libro: "
+      titolo = gets.chomp
+      print "Inserisci autore del libro: "
+      autore = gets.chomp
+      print "Inserisci anno del libro: "
+      anno = gets.chomp.to_i
+      libro = Libro.new(titolo, autore, anno)
+      libreria.add_book(libro)
+      libreria.save_to_file(LIBRERIA_FILE)
+      puts "Libro aggiunto con successo!"
+    when 5
+      break
     else
-      puts "Username o password errati."
+      puts "Scelta non valida."
     end
-  when 3
-    puts "Uscita dal programma."
-    break
-  else
-    puts "Scelta non valida."
   end
 end
+
+def loop_utente(utente, libreria, sistema_utenti)
+  loop do
+    mostra_menu_utente
+    scelta_utente = gets.chomp.to_i
+
+    case scelta_utente
+    when 1
+      puts libreria.list_books
+    when 2
+      puts libreria.list_borrowed_books
+    when 3
+      print "Inserisci titolo del libro da prestare: "
+      titolo = gets.chomp
+      if utente.spende_credito(1)
+        puts libreria.borrow_book(utente.username, titolo)
+        libreria.save_to_file(LIBRERIA_FILE)
+        sistema_utenti.save_to_file(UTENTI_FILE)
+      else
+        puts "Credito insufficiente per prendere in prestito il libro."
+      end
+    when 4
+      print "Inserisci titolo del libro da restituire: "
+      titolo = gets.chomp
+      puts libreria.return_book(utente.username, titolo)
+      utente.guadagna_credito(CREDITO_AGGIUNTA_LIBRO)
+      libreria.save_to_file(LIBRERIA_FILE)
+      sistema_utenti.save_to_file(UTENTI_FILE)
+    when 5
+      print "Inserisci titolo del libro da aggiungere: "
+      titolo = gets.chomp
+      print "Inserisci autore del libro: "
+      autore = gets.chomp
+      print "Inserisci anno del libro: "
+      anno = gets.chomp.to_i
+      libro = Libro.new(titolo, autore, anno)
+      libreria.add_book(libro)
+      utente.guadagna_credito(CREDITO_AGGIUNTA_LIBRO)
+      libreria.save_to_file(LIBRERIA_FILE)
+      sistema_utenti.save_to_file(UTENTI_FILE)
+      puts "Libro aggiunto e credito guadagnato con successo!"
+    when 6
+      puts "Saldo crediti: #{utente.crediti}"
+    when 7
+      break
+    else
+      puts "Scelta non valida."
+    end
+  end
+end
+
+def menu_pre_login(sistema_utenti, libreria, admin_sistema)
+  loop do
+    mostra_menu_pre_login
+    scelta_pre_login = gets.chomp.to_i
+
+    case scelta_pre_login
+    when 1
+      print "Inserisci username: "
+      username = gets.chomp
+      print "Inserisci password: "
+      password = gets.chomp
+      # print "Inserisci ruolo (user/admin): "
+      # ruolo = gets.chomp
+      puts sistema_utenti.register(username, password)
+      sistema_utenti.save_to_file(UTENTI_FILE)
+    when 2
+      print "Inserisci username: "
+      username = gets.chomp
+      print "Inserisci password: "
+      password = gets.chomp
+      utente = sistema_utenti.login(username, password)
+
+      if utente
+        if utente.ruolo == 'admin'
+          puts "Benvenuto admin!"
+          loop_admin(sistema_utenti, libreria)
+        else
+          puts "Benvenuto #{utente.username}!"
+          loop_utente(utente, libreria, sistema_utenti)
+        end
+      else
+        puts "Username o password errati."
+      end
+    when 3
+      puts "Uscita dal programma."
+      break
+    else
+      puts "Scelta non valida."
+    end
+  end
+end
+
+# Main Program
+libreria = Libreria.load_from_file(LIBRERIA_FILE)
+sistema_utenti = SistemaGestioneUtenti.load_from_file(UTENTI_FILE)
+
+# Creazione dell'utente admin se non esiste
+unless sistema_utenti.login('admin', ADMIN_PASSWORD)
+  sistema_utenti.register('admin', ADMIN_PASSWORD, 'admin')
+  sistema_utenti.save_to_file(UTENTI_FILE)
+end
+
+admin_sistema = SistemaGestioneAdmin.new(ADMIN_PASSWORD)
+
+menu_pre_login(sistema_utenti, libreria, admin_sistema)
+
+# Disclaimer: Questo software è rilasciato sotto la Licenza EUPL (European Union Public License).
+# Utilizzare questo software è soggetto ai termini e alle condizioni della Licenza EUPL.
+# Per ulteriori dettagli, consultare il testo completo della licenza.
+#
+# Copyright (C) Mario Pisano, 2024. Tutti i diritti riservati.
